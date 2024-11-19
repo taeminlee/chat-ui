@@ -23,7 +23,6 @@
 	import { fetchMessageUpdates } from "$lib/utils/messageUpdates";
 	import { createConvTreeStore } from "$lib/stores/convTree";
 	import type { v4 } from "uuid";
-	import { isReducedMotion } from "$lib/utils/isReduceMotion.js";
 	import { useSettingsStore } from "$lib/stores/settings.js";
 
 	export let data;
@@ -32,6 +31,8 @@
 
 	let loading = false;
 	let pending = false;
+
+	$: activeModel = findCurrentModel([...data.models, ...data.oldModels], data.model);
 
 	let files: File[] = [];
 
@@ -80,8 +81,6 @@
 			$isAborted = false;
 			loading = true;
 			pending = true;
-			const reducedMotionMode = isReducedMotion(window);
-
 			const base64Files = await Promise.all(
 				(files ?? []).map((file) =>
 					file2base64(file).then((value) => ({
@@ -204,7 +203,7 @@
 					messageId,
 					isRetry,
 					isContinue,
-					webSearch: !hasAssistant && $webSearchParameters.useSearch,
+					webSearch: !hasAssistant && !activeModel.tools && $webSearchParameters.useSearch,
 					tools: $settings.tools, // preference for tools
 					files: isRetry ? userMessage?.files : base64Files,
 				},
@@ -223,11 +222,6 @@
 					messageUpdatesAbortController.abort();
 					return;
 				}
-				if (update.type === "finalAnswer") {
-					loading = false;
-					pending = false;
-					break;
-				}
 
 				// Remove null characters added due to remote keylogging prevention
 				// See server code for more details
@@ -237,7 +231,7 @@
 
 				messageUpdates.push(update);
 
-				if (update.type === MessageUpdateType.Stream && !reducedMotionMode) {
+				if (update.type === MessageUpdateType.Stream && !$settings.disableStream) {
 					messageToWriteTo.content += update.token;
 					pending = false;
 					messages = [...messages];
@@ -253,7 +247,9 @@
 				) {
 					$error = update.message ?? "An error has occurred";
 				} else if (update.type === MessageUpdateType.Title) {
-					const convInData = data.conversations.find(({ id }) => id === $page.params.id);
+					const convInData = await data.conversations.then((convs) =>
+						convs.find(({ id }) => id === $page.params.id)
+					);
 					if (convInData) {
 						convInData.title = update.title;
 
@@ -364,7 +360,7 @@
 
 	async function onContinue(event: CustomEvent<{ id: Message["id"] }>) {
 		if (!data.shared) {
-			writeMessage({ messageId: event.detail.id, isContinue: true });
+			await writeMessage({ messageId: event.detail.id, isContinue: true });
 		} else {
 			await convFromShared()
 				.then(async (convId) => {
@@ -382,14 +378,18 @@
 	}
 
 	$: $page.params.id, (($isAborted = true), (loading = false), ($convTreeStore.editing = null));
-	$: title = data.conversations.find((conv) => conv.id === $page.params.id)?.title ?? data.title;
+	$: title = data.conversations.then(
+		(convs) => convs.find((conv) => conv.id === $page.params.id)?.title ?? data.title
+	);
 
 	const convTreeStore = createConvTreeStore();
 	const settings = useSettingsStore();
 </script>
 
 <svelte:head>
-	<title>{title}</title>
+	{#await title then title}
+		<title>{title}</title>
+	{/await}
 	<link
 		rel="stylesheet"
 		href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css"

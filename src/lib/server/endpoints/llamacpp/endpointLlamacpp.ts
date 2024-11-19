@@ -9,17 +9,15 @@ export const endpointLlamacppParametersSchema = z.object({
 	weight: z.number().int().positive().default(1),
 	model: z.any(),
 	type: z.literal("llamacpp"),
-	url: z.string().url().default("http://127.0.0.1:8080"),
-	accessToken: z
-		.string()
-		.min(1)
-		.default(env.HF_TOKEN ?? env.HF_ACCESS_TOKEN),
+	url: z.string().url().default("http://127.0.0.1:8080"), // legacy, feel free to remove in breaking change update
+	baseURL: z.string().url().optional(),
+	accessToken: z.string().default(env.HF_TOKEN ?? env.HF_ACCESS_TOKEN),
 });
 
 export function endpointLlamacpp(
 	input: z.input<typeof endpointLlamacppParametersSchema>
 ): Endpoint {
-	const { url, model } = endpointLlamacppParametersSchema.parse(input);
+	const { baseURL, url, model } = endpointLlamacppParametersSchema.parse(input);
 	return async ({ messages, preprompt, continueMessage, generateSettings }) => {
 		const prompt = await buildPrompt({
 			messages,
@@ -30,7 +28,7 @@ export function endpointLlamacpp(
 
 		const parameters = { ...model.parameters, ...generateSettings };
 
-		const r = await fetch(`${url}/completion`, {
+		const r = await fetch(`${baseURL ?? url}/completion`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",

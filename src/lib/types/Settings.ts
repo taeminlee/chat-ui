@@ -21,9 +21,12 @@ export interface Settings extends Timestamps {
 	customPrompts?: Record<string, string>;
 
 	assistants?: Assistant["_id"][];
-	tools?: Record<string, boolean>;
+	tools?: string[];
+	disableStream: boolean;
+	directPaste: boolean;
 }
 
+export type SettingsEditable = Omit<Settings, "ethicsModalAcceptedAt" | "createdAt" | "updatedAt">;
 // TODO: move this to a constant file along with other constants
 export const DEFAULT_SETTINGS = {
 	shareConversationsWithModelAuthors: true,
@@ -31,5 +34,7 @@ export const DEFAULT_SETTINGS = {
 	hideEmojiOnSidebar: false,
 	customPrompts: {},
 	assistants: [],
-	tools: {},
-};
+	tools: [],
+	disableStream: false,
+	directPaste: false,
+} satisfies SettingsEditable;
